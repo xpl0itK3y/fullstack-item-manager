@@ -25,12 +25,13 @@
             </div>
 
             <div class="panel">
-                <ItemList
+                <SelectedItemList
                     ref="selectedList"
                     title="Выбранные элементы"
                     action-text="Удалить"
                     :fetch-function="getSelectedItems"
                     @item-click="deselectItem"
+                    @reorder="reorderItems"
                 />
             </div>
         </div>
@@ -43,12 +44,14 @@
 
 <script>
 import ItemList from "./components/ItemList.vue";
+import SelectedItemList from "./components/SelectedItemList.vue";
 import api from "./services/api.js";
 
 export default {
     name: "App",
     components: {
         ItemList,
+        SelectedItemList,
     },
     data() {
         return {
@@ -56,6 +59,13 @@ export default {
             message: "",
             messageType: "success",
         };
+    },
+    mounted() {
+        // При загрузке приложения данные автоматически подгружаются
+        // Состояние хранится на сервере, поэтому сразу видим актуальные данные
+        console.log(
+            "✓ Приложение загружено, состояние восстановлено с сервера",
+        );
     },
     methods: {
         getAvailableItems(page, limit, search) {
@@ -68,31 +78,44 @@ export default {
 
         async selectItem(item) {
             try {
-                await api.selectItem(item.id);
-                this.showMessage("Элемент добавлен в очередь", "success");
+                // Оптимистичное обновление - сразу убираем из левого, добавляем в правое
+                this.$refs.availableList.removeItemOptimistic(item.id);
+                this.$refs.selectedList.addItemOptimistic(item);
 
-                // Обновляем списки через 1.5 секунды (после батчинга)
-                setTimeout(() => {
-                    this.$refs.availableList.refresh();
-                    this.$refs.selectedList.refresh();
-                }, 1500);
+                await api.selectItem(item.id);
+                this.showMessage("Элемент добавлен", "success");
             } catch (error) {
+                // Если ошибка - откатываем изменения
+                this.$refs.availableList.refresh();
+                this.$refs.selectedList.refresh();
                 this.showMessage("Ошибка при добавлении элемента", "error");
             }
         },
 
         async deselectItem(item) {
             try {
-                await api.deselectItem(item.id);
-                this.showMessage("Элемент удален из очереди", "success");
+                // Оптимистичное обновление - сразу убираем из правого, добавляем в левое
+                this.$refs.selectedList.removeItemOptimistic(item.id);
+                this.$refs.availableList.addItemOptimistic(item);
 
-                // Обновляем списки через 1.5 секунды (после батчинга)
-                setTimeout(() => {
-                    this.$refs.availableList.refresh();
-                    this.$refs.selectedList.refresh();
-                }, 1500);
+                await api.deselectItem(item.id);
+                this.showMessage("Элемент удален", "success");
             } catch (error) {
+                // Если ошибка - откатываем изменения
+                this.$refs.availableList.refresh();
+                this.$refs.selectedList.refresh();
                 this.showMessage("Ошибка при удалении элемента", "error");
+            }
+        },
+
+        async reorderItems(items) {
+            try {
+                await api.reorderItems(items);
+                this.showMessage("Порядок обновлен", "success");
+            } catch (error) {
+                // Если ошибка - откатываем
+                this.$refs.selectedList.refresh();
+                this.showMessage("Ошибка при изменении порядка", "error");
             }
         },
 
@@ -104,13 +127,23 @@ export default {
 
             try {
                 const response = await api.addNewItem(this.newItemId);
-                this.showMessage(response.data.message, "success");
+                const itemId = this.newItemId;
                 this.newItemId = "";
 
-                // Обновляем список через 11 секунд (после батчинга)
+                // Показываем что элемент в очереди
+                this.showMessage(
+                    "Элемент добавлен в очередь. Обработка через 10 секунд...",
+                    "info",
+                );
+
+                // Через 10.5 секунд обновляем список и показываем успех
                 setTimeout(() => {
                     this.$refs.availableList.refresh();
-                }, 11000);
+                    this.showMessage(
+                        `Элемент ID ${itemId} успешно добавлен!`,
+                        "success",
+                    );
+                }, 10500);
             } catch (error) {
                 const errorMsg =
                     error.response?.data?.error ||
@@ -123,9 +156,12 @@ export default {
             this.message = text;
             this.messageType = type;
 
+            // Для info сообщений - дольше показываем
+            const duration = type === "info" ? 10000 : 1500;
+
             setTimeout(() => {
                 this.message = "";
-            }, 3000);
+            }, duration);
         },
     },
 };
@@ -211,6 +247,7 @@ body {
     font-weight: 500;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     animation: slideIn 0.3s;
+    z-index: 1000;
 }
 
 .message.success {
@@ -219,6 +256,10 @@ body {
 
 .message.error {
     background: #f44336;
+}
+
+.message.info {
+    background: #2196f3;
 }
 
 @keyframes slideIn {

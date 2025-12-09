@@ -12,15 +12,25 @@
         </div>
 
         <div class="item-list" @scroll="onScroll" ref="listContainer">
-            <div
-                v-for="item in items"
-                :key="item.id"
-                class="item"
-                @click="$emit('item-click', item)"
+            <draggable
+                v-model="displayedItems"
+                @end="onDragEnd"
+                item-key="id"
+                handle=".drag-handle"
             >
-                <span class="item-id">ID: {{ item.id }}</span>
-                <button class="item-action">{{ actionText }}</button>
-            </div>
+                <template #item="{ element }">
+                    <div class="item">
+                        <span class="drag-handle">⋮⋮</span>
+                        <span class="item-id">ID: {{ element.id }}</span>
+                        <button
+                            class="item-action"
+                            @click="$emit('item-click', element)"
+                        >
+                            {{ actionText }}
+                        </button>
+                    </div>
+                </template>
+            </draggable>
 
             <div v-if="loading" class="loading">Загрузка...</div>
             <div v-if="!hasMore && items.length > 0" class="end">
@@ -34,17 +44,23 @@
 </template>
 
 <script>
+import draggable from "vuedraggable";
+
 export default {
-    name: "ItemList",
+    name: "SelectedItemList",
+    components: {
+        draggable,
+    },
     props: {
         title: String,
         actionText: String,
         fetchFunction: Function,
     },
-    emits: ["item-click"],
+    emits: ["item-click", "reorder"],
     data() {
         return {
             items: [],
+            displayedItems: [],
             page: 1,
             loading: false,
             hasMore: true,
@@ -81,6 +97,7 @@ export default {
                     this.items.push(...data.items);
                 }
 
+                this.displayedItems = [...this.items];
                 this.hasMore = data.hasMore;
                 this.page++;
             } catch (error) {
@@ -93,7 +110,6 @@ export default {
         onScroll(event) {
             const { scrollTop, scrollHeight, clientHeight } = event.target;
 
-            // Подгружаем когда до конца осталось 100px
             if (scrollHeight - scrollTop - clientHeight < 100) {
                 this.loadItems();
             }
@@ -106,6 +122,11 @@ export default {
             }, 300);
         },
 
+        onDragEnd() {
+            // Отправляем новый порядок на сервер
+            this.$emit("reorder", this.displayedItems);
+        },
+
         refresh() {
             this.loadItems(true);
         },
@@ -113,11 +134,15 @@ export default {
         // Оптимистичное удаление элемента
         removeItemOptimistic(id) {
             this.items = this.items.filter((item) => item.id !== id);
+            this.displayedItems = this.displayedItems.filter(
+                (item) => item.id !== id,
+            );
         },
 
         // Оптимистичное добавление элемента
         addItemOptimistic(item) {
-            this.items.unshift(item);
+            this.items.push(item);
+            this.displayedItems.push(item);
         },
     },
 };
@@ -166,22 +191,37 @@ export default {
     background: #f9f9f9;
     border: 1px solid #eee;
     border-radius: 4px;
-    cursor: pointer;
+    cursor: move;
     transition: all 0.2s;
 }
 
 .item:hover {
     background: #f0f0f0;
     border-color: #4caf50;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.drag-handle {
+    cursor: grab;
+    color: #999;
+    font-size: 18px;
+    padding: 0 8px;
+    user-select: none;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
 }
 
 .item-id {
+    flex: 1;
     font-weight: 500;
+    margin-left: 8px;
 }
 
 .item-action {
     padding: 6px 12px;
-    background: #4caf50;
+    background: #f44336;
     color: white;
     border: none;
     border-radius: 4px;
@@ -190,7 +230,7 @@ export default {
 }
 
 .item-action:hover {
-    background: #45a049;
+    background: #da190b;
 }
 
 .loading,

@@ -14,15 +14,15 @@ class ItemService {
     this.selectedItems = [];
     this.selectedIds = new Set();
 
-    // Очереди с батчингом
+    // Очереди с батчингом (строго по ТЗ)
     this.addQueue = new RequestQueue(
       (items) => this.processAddItems(items),
-      10000, // 10 секунд
+      10000, // 10 секунд - добавление элементов
     );
 
     this.updateQueue = new RequestQueue(
       (items) => this.processUpdateItems(items),
-      1000, // 1 секунда
+      1000, // 1 секунда - получение и изменение данных
     );
   }
 
