@@ -1,6 +1,6 @@
-# Fullstack Item Manager
+# Full-stack Item Manager
 
-Fullstack приложение для управления списком из 1 млн элементов с drag-and-drop сортировкой, инфинити-скроллом и фильтрацией. Vue.js + Express.js + Docker.
+Full-stack приложение для управления списком из 1 млн элементов с drag-and-drop сортировкой, инфинити-скроллом и фильтрацией. Vue.js + Express.js + Docker.
 
 Тестовое задание на позицию fullstack разработчика.
 
