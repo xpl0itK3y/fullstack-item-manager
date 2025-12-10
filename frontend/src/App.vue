@@ -58,6 +58,9 @@ export default {
             newItemId: "",
             message: "",
             messageType: "success",
+            pendingItems: [], // Массив элементов с индивидуальными таймерами
+            messageQueue: [], // Очередь уведомлений
+            isShowingMessage: false, // Флаг показа уведомления
         };
     },
     mounted() {
@@ -78,44 +81,70 @@ export default {
 
         async selectItem(item) {
             try {
-                // Оптимистичное обновление - сразу убираем из левого, добавляем в правое
-                this.$refs.availableList.removeItemOptimistic(item.id);
-                this.$refs.selectedList.addItemOptimistic(item);
+                // Блокируем элемент на 1 секунду перед переносом
+                this.$refs.availableList.setLoadingState(item.id, true);
+                
+                setTimeout(() => {
+                    // Оптимистичное обновление - убираем из левого, добавляем в правое
+                    this.$refs.availableList.removeItemOptimistic(item.id);
+                    this.$refs.selectedList.addItemOptimistic(item);
+                    this.$refs.availableList.setLoadingState(item.id, false);
+                }, 1000);
 
                 await api.selectItem(item.id);
-                this.showMessage("Элемент добавлен", "success");
+
+                // Обновляем через 1.2 сек (после батчинга 1 сек)
+                setTimeout(() => {
+                    this.showMessage(`ID ${item.id} добавлен`, "success");
+                }, 1200);
             } catch (error) {
                 // Если ошибка - откатываем изменения
+                this.$refs.availableList.setLoadingState(item.id, false);
                 this.$refs.availableList.refresh();
                 this.$refs.selectedList.refresh();
-                this.showMessage("Ошибка при добавлении элемента", "error");
+                this.showMessage("Ошибка при добавлении", "error");
             }
         },
 
         async deselectItem(item) {
             try {
-                // Оптимистичное обновление - сразу убираем из правого, добавляем в левое
-                this.$refs.selectedList.removeItemOptimistic(item.id);
-                this.$refs.availableList.addItemOptimistic(item);
+                // Блокируем элемент на 1 секунду перед переносом
+                this.$refs.selectedList.setLoadingState(item.id, true);
+                
+                setTimeout(() => {
+                    // Оптимистичное обновление - убираем из правого, добавляем в левое
+                    this.$refs.selectedList.removeItemOptimistic(item.id);
+                    this.$refs.availableList.addItemOptimistic(item);
+                    this.$refs.selectedList.setLoadingState(item.id, false);
+                }, 1000);
 
                 await api.deselectItem(item.id);
-                this.showMessage("Элемент удален", "success");
+
+                // Обновляем через 1.2 сек (после батчинга 1 сек)
+                setTimeout(() => {
+                    this.showMessage(`ID ${item.id} удален`, "success");
+                }, 1200);
             } catch (error) {
                 // Если ошибка - откатываем изменения
+                this.$refs.selectedList.setLoadingState(item.id, false);
                 this.$refs.availableList.refresh();
                 this.$refs.selectedList.refresh();
-                this.showMessage("Ошибка при удалении элемента", "error");
+                this.showMessage("Ошибка при удалении", "error");
             }
         },
 
         async reorderItems(items) {
             try {
                 await api.reorderItems(items);
-                this.showMessage("Порядок обновлен", "success");
+
+                // Обновляем через 1.2 сек (после батчинга 1 сек)
+                setTimeout(() => {
+                    this.showMessage("Порядок обновлен", "success");
+                }, 1200);
             } catch (error) {
                 // Если ошибка - откатываем
                 this.$refs.selectedList.refresh();
-                this.showMessage("Ошибка при изменении порядка", "error");
+                this.showMessage("Ошибка изменения порядка", "error");
             }
         },
 
@@ -126,41 +155,81 @@ export default {
             }
 
             try {
-                const response = await api.addNewItem(this.newItemId);
                 const itemId = this.newItemId;
+                await api.addNewItem(itemId);
                 this.newItemId = "";
 
-                // Показываем что элемент в очереди
-                this.showMessage(
-                    "Элемент добавлен в очередь. Обработка через 10 секунд...",
-                    "info",
-                );
+                // Добавляем элемент в очередь с текущим временем
+                const timestamp = Date.now();
+                this.pendingItems.push({ id: itemId, timestamp });
 
-                // Через 10.5 секунд обновляем список и показываем успех
-                setTimeout(() => {
-                    this.$refs.availableList.refresh();
+                // Показываем сколько элементов в очереди
+                if (this.pendingItems.length === 1) {
                     this.showMessage(
-                        `Элемент ID ${itemId} успешно добавлен!`,
+                        `ID ${itemId} добавлен. Ожидание обработки...`,
+                        "info",
+                    );
+                } else {
+                    this.showMessage(
+                        `ID ${itemId} добавлен. В очереди: ${this.pendingItems.length} элемент(ов)`,
+                        "info",
+                    );
+                }
+
+                // Устанавливаем индивидуальный таймер для этого элемента
+                setTimeout(() => {
+                    // Удаляем из очереди
+                    this.pendingItems = this.pendingItems.filter(
+                        (item) => item.id !== itemId,
+                    );
+
+                    // Обновляем список
+                    this.$refs.availableList.refresh();
+
+                    // Показываем успех для конкретного элемента
+                    this.showMessage(
+                        `✓ Элемент ID ${itemId} успешно добавлен!`,
                         "success",
                     );
                 }, 10500);
             } catch (error) {
                 const errorMsg =
-                    error.response?.data?.error ||
-                    "Ошибка при добавлении элемента";
+                    error.response?.data?.error || "Ошибка добавления";
                 this.showMessage(errorMsg, "error");
             }
         },
 
         showMessage(text, type = "success") {
+            // Добавляем в очередь
+            this.messageQueue.push({ text, type });
+
+            // Если не показываем сейчас - начинаем показ
+            if (!this.isShowingMessage) {
+                this.processMessageQueue();
+            }
+        },
+
+        processMessageQueue() {
+            if (this.messageQueue.length === 0) {
+                this.isShowingMessage = false;
+                return;
+            }
+
+            this.isShowingMessage = true;
+            const { text, type } = this.messageQueue.shift();
+
             this.message = text;
             this.messageType = type;
 
-            // Для info сообщений - дольше показываем
-            const duration = type === "info" ? 10000 : 1500;
+            // Быстрые уведомления
+            const duration = type === "info" ? 2000 : 1500;
 
             setTimeout(() => {
                 this.message = "";
+                // Показываем следующее через 200мс паузу
+                setTimeout(() => {
+                    this.processMessageQueue();
+                }, 200);
             }, duration);
         },
     },
@@ -271,5 +340,21 @@ body {
         transform: translateX(0);
         opacity: 1;
     }
+}
+
+@keyframes pulse {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+}
+
+.message.info {
+    animation:
+        slideIn 0.2s,
+        pulse 2s infinite;
 }
 </style>

@@ -16,10 +16,13 @@
                 v-for="item in items"
                 :key="item.id"
                 class="item"
-                @click="$emit('item-click', item)"
+                :class="{ 'loading': loadingItems.has(item.id) }"
+                @click="!loadingItems.has(item.id) && $emit('item-click', item)"
             >
                 <span class="item-id">ID: {{ item.id }}</span>
-                <button class="item-action">{{ actionText }}</button>
+                <button class="item-action" :disabled="loadingItems.has(item.id)">
+                    {{ loadingItems.has(item.id) ? 'Перенос...' : actionText }}
+                </button>
             </div>
 
             <div v-if="loading" class="loading">Загрузка...</div>
@@ -50,6 +53,7 @@ export default {
             hasMore: true,
             searchQuery: "",
             searchTimeout: null,
+            loadingItems: new Set(), // Элементы в состоянии загрузки
         };
     },
     mounted() {
@@ -118,6 +122,15 @@ export default {
         // Оптимистичное добавление элемента
         addItemOptimistic(item) {
             this.items.unshift(item);
+        },
+
+        // Установка состояния загрузки для элемента
+        setLoadingState(id, isLoading) {
+            if (isLoading) {
+                this.loadingItems.add(id);
+            } else {
+                this.loadingItems.delete(id);
+            }
         },
     },
 };
@@ -189,8 +202,15 @@ export default {
     font-size: 12px;
 }
 
-.item-action:hover {
-    background: #45a049;
+.item.loading {
+            opacity: 0.6;
+            pointer-events: none;
+            background: #e3f2fd;
+            border-color: #2196f3;
+        }
+
+.item.loading .item-action {
+            background: #2196f3;
 }
 
 .loading,

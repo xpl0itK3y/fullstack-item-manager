@@ -19,14 +19,15 @@
                 handle=".drag-handle"
             >
                 <template #item="{ element }">
-                    <div class="item">
+                    <div class="item" :class="{ 'loading': loadingItems.has(element.id) }">
                         <span class="drag-handle">⋮⋮</span>
                         <span class="item-id">ID: {{ element.id }}</span>
                         <button
                             class="item-action"
-                            @click="$emit('item-click', element)"
+                            :disabled="loadingItems.has(element.id)"
+                            @click="!loadingItems.has(element.id) && $emit('item-click', element)"
                         >
-                            {{ actionText }}
+                            {{ loadingItems.has(element.id) ? 'Перенос...' : actionText }}
                         </button>
                     </div>
                 </template>
@@ -66,6 +67,7 @@ export default {
             hasMore: true,
             searchQuery: "",
             searchTimeout: null,
+            loadingItems: new Set(), // Элементы в состоянии загрузки
         };
     },
     mounted() {
@@ -143,6 +145,15 @@ export default {
         addItemOptimistic(item) {
             this.items.push(item);
             this.displayedItems.push(item);
+        },
+
+        // Установка состояния загрузки для элемента
+        setLoadingState(id, isLoading) {
+            if (isLoading) {
+                this.loadingItems.add(id);
+            } else {
+                this.loadingItems.delete(id);
+            }
         },
     },
 };
@@ -231,6 +242,17 @@ export default {
 
 .item-action:hover {
     background: #da190b;
+}
+
+.item.loading {
+            opacity: 0.6;
+            pointer-events: none;
+            background: #e3f2fd;
+            border-color: #2196f3;
+        }
+
+.item.loading .item-action {
+            background: #2196f3;
 }
 
 .loading,
