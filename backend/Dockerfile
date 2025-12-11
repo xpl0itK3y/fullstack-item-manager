@@ -10,4 +10,4 @@ COPY . .
 
 EXPOSE 3000
 
-CMD [ "npm", "start" ]
+CMD [ "node", "--max-old-space-size=1024", "src/server.js" ]

@@ -2,11 +2,25 @@ import { RequestQueue } from "../utils/queue.js";
 
 class ItemService {
   constructor() {
-    // Генерируем 1 000 000 элементов
+    // Генерируем 1 000 000 элементов (оптимизированно)
     console.log("Генерация 1 000 000 элементов...");
+    this.allItemsCount = 1000000;
     this.allItems = [];
-    for (let i = 1; i <= 1000000; i++) {
-      this.allItems.push({ id: i });
+    
+    // Генерируем порциями для экономии памяти
+    const batchSize = 10000;
+    for (let i = 1; i <= this.allItemsCount; i += batchSize) {
+      const batch = [];
+      const end = Math.min(i + batchSize - 1, this.allItemsCount);
+      for (let j = i; j <= end; j++) {
+        batch.push({ id: j });
+      }
+      this.allItems.push(...batch);
+      
+      // Очистка для сборщика мусора
+      if (i % 50000 === 0) {
+        if (global.gc) global.gc();
+      }
     }
     console.log("✓ Элементы сгенерированы");
 
