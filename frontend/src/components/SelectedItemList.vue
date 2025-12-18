@@ -118,8 +118,14 @@ export default {
         },
 
         onSearchChange() {
+            // Сбрасываем состояние списка при изменении фильтра,
+            // чтобы после очистки поиска снова подгружать все элементы
             clearTimeout(this.searchTimeout);
             this.searchTimeout = setTimeout(() => {
+                this.page = 1;
+                this.hasMore = true;
+                this.items = [];
+                this.displayedItems = [];
                 this.loadItems(true);
             }, 300);
         },
